@@ -1,0 +1,13 @@
+{
+  "name": "todo-app",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.16.0"
+  }
+}

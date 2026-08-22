@@ -3,8 +3,9 @@
 The todo app from the Kipper video series, with one feature built per episode.
 Every episode is tagged, so you can start anywhere.
 
-Right now it's a single HTML file with the list held in memory. Add something,
-reload the page, and it's gone. Episode two gives it a database.
+Right now it's a small Node service that keeps the list in Postgres, so a todo
+survives a reload. Everyone who opens the page shares the one list. Episode
+three signs you in without a password.
 
 ## Episode 1: from GitHub to a live URL
 
@@ -137,11 +138,47 @@ cert-manager.
 The console is at `https://console--<your-cluster-domain>`, and the app you made
 from the CLI is already in it.
 
+## Episode 2: give it a database
+
+Starts where episode 1 ended: the cluster is up, you're signed in, and
+`todo-app` is live. The app grew a backend this episode, an Express server that
+keeps the list in Postgres and reads the connection from environment variables.
+
+Ask for it:
+
+```text
+Add a Postgres database called db to the cluster and bind it to todo-app, then
+rebuild todo-app so it runs the new backend.
+```
+
+Or run it:
+
+```bash
+kip service add postgres --name db
+```
+
+```bash
+kip service bind db todo-app
+```
+
+```bash
+kip app rebuild todo-app
+```
+
+`service add` runs a Postgres on your cluster. `bind` creates a database for
+the app inside it and injects `DB_HOST`, `DB_PORT`, `DB_USERNAME`,
+`DB_PASSWORD` and `DB_NAME` into the app's environment, restarting the app so
+it picks them up. Nobody wrote a connection string. `rebuild` builds the new
+backend from this repo, exactly like episode 1.
+
+Open the app, add a todo, refresh. It's still there.
+
 ## Following along
 
 | Tag | Episode |
 | --- | --- |
 | `ep-1` | From GitHub to a live URL |
+| `ep-2` | Give it a database |
 
 ## What this is
 

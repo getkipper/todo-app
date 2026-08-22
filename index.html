@@ -61,12 +61,31 @@
     cursor: pointer;
   }
   #empty { color: var(--muted); }
+  #status {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 0.5rem;
+    padding: 0.75rem 0.9rem;
+    margin: 0 0 1rem;
+  }
+  /* display:flex would defeat the hidden attribute. */
+  #status[hidden] { display: none; }
+  #status svg { flex: none; width: 1.2rem; height: 1.2rem; fill: currentColor; }
 </style>
 </head>
 <body>
 
 <main>
   <h1>Todo</h1>
+
+  <p id="status" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 1 21h22L12 2zm1 14h-2v2h2v-2zm0-7h-2v5h2V9z"/></svg>
+    <span id="statusText"></span>
+  </p>
 
   <form id="add">
     <input id="text" placeholder="What needs doing?" autocomplete="off" required>
@@ -78,34 +97,88 @@
 </main>
 
 <script>
-  // The list lives in memory only, so a reload starts over.
+  // The list lives in Postgres, behind the small API in server.js. Until a
+  // database is bound, it falls back to the page's own memory, which is how
+  // the app behaved before it had a backend: a refresh starts over.
   let todos = []
+  let remote = false
   let nextId = 1
 
   const list = document.getElementById('list')
   const empty = document.getElementById('empty')
+  const status = document.getElementById('status')
+  const statusText = document.getElementById('statusText')
   const text = document.getElementById('text')
+
+  async function api(path, options) {
+    const res = await fetch(path, options)
+    if (res.status === 204) return null
+    const body = await res.json()
+    if (!res.ok) throw new Error(body.error)
+    return body
+  }
+
+  // Runs one API action, showing its error in the banner if it fails.
+  async function attempt(action) {
+    try {
+      await action()
+      status.hidden = true
+    } catch (err) {
+      statusText.textContent = err.message
+      status.hidden = false
+    }
+    render()
+  }
 
   document.getElementById('add').addEventListener('submit', event => {
     event.preventDefault()
-    todos.push({ id: nextId++, title: text.value.trim(), done: false })
-    text.value = ''
-    render()
+    if (!remote) {
+      todos.push({ id: nextId++, title: text.value.trim(), done: false })
+      text.value = ''
+      render()
+      return
+    }
+    attempt(async () => {
+      todos.push(await api('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: text.value.trim() }),
+      }))
+      text.value = ''
+    })
   })
 
   function toggle(id) {
     const todo = todos.find(todo => todo.id === id)
-    todo.done = !todo.done
-    render()
+    if (!remote) {
+      todo.done = !todo.done
+      render()
+      return
+    }
+    attempt(async () => {
+      const updated = await api(`/api/todos/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done: !todo.done }),
+      })
+      todo.done = updated.done
+    })
   }
 
   function remove(id) {
-    todos = todos.filter(todo => todo.id !== id)
-    render()
+    if (!remote) {
+      todos = todos.filter(todo => todo.id !== id)
+      render()
+      return
+    }
+    attempt(async () => {
+      await api(`/api/todos/${id}`, { method: 'DELETE' })
+      todos = todos.filter(todo => todo.id !== id)
+    })
   }
 
   function render() {
-    empty.hidden = todos.length > 0
+    empty.hidden = todos.length > 0 || !status.hidden
 
     list.replaceChildren(...todos.map(todo => {
       const item = document.createElement('li')
@@ -129,7 +202,20 @@
     }))
   }
 
-  render()
+  async function load() {
+    try {
+      todos = await api('/api/todos')
+      remote = true
+      status.hidden = true
+    } catch (err) {
+      remote = false
+      statusText.textContent = `${err.message} Todos are kept on this page only, and a refresh loses them.`
+      status.hidden = false
+    }
+    render()
+  }
+
+  load()
 </script>
 
 </body>
